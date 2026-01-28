@@ -4,39 +4,42 @@ namespace VertexLuaExecutor;
 
 public partial class MainForm : Form
 {
-    private ColorPalette _currentPalette;
     private readonly List<ScriptTab> _tabs = new();
     private ScriptTab? _activeTab;
     private int _tabCounter = 1;
+
+    // Colors matching reference exactly
+    private readonly Color _bgColor = Color.FromArgb(20, 20, 20);
+    private readonly Color _editorBg = Color.FromArgb(30, 30, 30);
+    private readonly Color _tabBg = Color.FromArgb(40, 40, 40);
+    private readonly Color _textColor = Color.FromArgb(220, 220, 220);
+    private readonly Color _textDim = Color.FromArgb(100, 100, 100);
+    private readonly Color _accentOrange = Color.FromArgb(255, 100, 50);
+    private readonly Color _logoBlue = Color.FromArgb(0, 120, 215);
+
+    // Syntax colors from reference
+    private readonly Color _syntaxKeyword = Color.FromArgb(240, 80, 80);  // Red
+    private readonly Color _syntaxString = Color.FromArgb(206, 145, 120); // Orange/brown
+    private readonly Color _syntaxComment = Color.FromArgb(106, 153, 85); // Green
+    private readonly Color _syntaxNumber = Color.FromArgb(220, 220, 220); // White
 
     // UI Components
     private Panel _titleBar = null!;
     private Panel _logoPanel = null!;
     private Button _settingsBtn = null!;
-    private Panel _windowControls = null!;
     private Button _minimizeBtn = null!;
     private Button _maximizeBtn = null!;
     private Button _closeBtn = null!;
 
     private Panel _tabBar = null!;
-    private Panel _tabContainer = null!;
-    private Button _addTabBtn = null!;
+    private FlowLayoutPanel _tabContainer = null!;
+    private Label _addTabBtn = null!;
 
-    private Panel _editorContainer = null!;
-    private Panel _lineNumberPanel = null!;
+    private Panel _editorPanel = null!;
     private RichTextBox _lineNumbers = null!;
+    private RichTextBox? _currentEditor;
 
-    private Panel _toolbar = null!;
-    private Panel _toolbarInner = null!;
-    private Button _executeBtn = null!;
-    private Button _clearBtn = null!;
-    private Button _openBtn = null!;
-    private Button _saveBtn = null!;
-    private Button _attachBtn = null!;
-    private Button _killBtn = null!;
-
-    private ContextMenuStrip _paletteMenu = null!;
-    private ContextMenuStrip _settingsMenu = null!;
+    private Panel _toolbarPanel = null!;
 
     private LuaSyntaxHighlighter? _highlighter;
     private bool _isDragging;
@@ -44,7 +47,6 @@ public partial class MainForm : Form
 
     public MainForm()
     {
-        _currentPalette = ColorPalette.DefaultDark;
         InitializeComponent();
         CreateNewTab();
     }
@@ -53,241 +55,240 @@ public partial class MainForm : Form
     {
         SuspendLayout();
 
-        // Form settings
-        Text = "Vertex Lua Executor";
-        Size = new Size(900, 600);
-        MinimumSize = new Size(600, 400);
+        Text = "Vertex";
+        Size = new Size(950, 650);
+        MinimumSize = new Size(700, 500);
         FormBorderStyle = FormBorderStyle.None;
         StartPosition = FormStartPosition.CenterScreen;
+        BackColor = _bgColor;
         DoubleBuffered = true;
 
-        // Title Bar
+        // ===== TITLE BAR =====
         _titleBar = new Panel
         {
             Dock = DockStyle.Top,
-            Height = 40
+            Height = 45,
+            BackColor = _bgColor
         };
         _titleBar.MouseDown += TitleBar_MouseDown;
         _titleBar.MouseMove += TitleBar_MouseMove;
         _titleBar.MouseUp += TitleBar_MouseUp;
-        _titleBar.DoubleClick += TitleBar_DoubleClick;
+        _titleBar.DoubleClick += (s, e) => ToggleMaximize();
 
-        // Logo Panel (draws the stylized V)
+        // Logo (V shape) - BLUE instead of red like reference
         _logoPanel = new Panel
         {
-            Size = new Size(40, 40),
-            Location = new Point(5, 0)
+            Size = new Size(35, 35),
+            Location = new Point(12, 5),
+            BackColor = Color.Transparent
         };
         _logoPanel.Paint += LogoPanel_Paint;
-        _logoPanel.MouseDown += TitleBar_MouseDown;
-        _logoPanel.MouseMove += TitleBar_MouseMove;
-        _logoPanel.MouseUp += TitleBar_MouseUp;
         _titleBar.Controls.Add(_logoPanel);
 
-        // Window Controls Panel
-        _windowControls = new Panel
-        {
-            Dock = DockStyle.Right,
-            Width = 180
-        };
+        // Window buttons (right side)
+        _closeBtn = CreateTitleButton("✕", 0);
+        _closeBtn.Click += (s, e) => Close();
+        _closeBtn.FlatAppearance.MouseOverBackColor = Color.FromArgb(200, 50, 50);
 
-        // Settings button (gear icon)
-        _settingsBtn = new Button
-        {
-            Text = "⚙",
-            Size = new Size(40, 40),
-            Location = new Point(0, 0),
-            FlatStyle = FlatStyle.Flat,
-            Font = new Font("Segoe UI", 14),
-            Cursor = Cursors.Hand
-        };
-        _settingsBtn.FlatAppearance.BorderSize = 0;
-        _settingsBtn.Click += SettingsBtn_Click;
+        _maximizeBtn = CreateTitleButton("□", 45);
+        _maximizeBtn.Click += (s, e) => ToggleMaximize();
 
-        _minimizeBtn = CreateWindowButton("─", 46);
+        _minimizeBtn = CreateTitleButton("─", 90);
         _minimizeBtn.Click += (s, e) => WindowState = FormWindowState.Minimized;
 
-        _maximizeBtn = CreateWindowButton("□", 92);
-        _maximizeBtn.Click += (s, e) =>
+        _settingsBtn = CreateTitleButton("⚙", 135);
+
+        var btnPanel = new Panel
         {
-            WindowState = WindowState == FormWindowState.Maximized
-                ? FormWindowState.Normal
-                : FormWindowState.Maximized;
+            Size = new Size(180, 45),
+            Dock = DockStyle.Right,
+            BackColor = Color.Transparent
         };
+        btnPanel.Controls.AddRange(new Control[] { _closeBtn, _maximizeBtn, _minimizeBtn, _settingsBtn });
+        _titleBar.Controls.Add(btnPanel);
 
-        _closeBtn = CreateWindowButton("✕", 138);
-        _closeBtn.Click += (s, e) => Close();
-
-        _windowControls.Controls.AddRange(new Control[] { _settingsBtn, _minimizeBtn, _maximizeBtn, _closeBtn });
-        _titleBar.Controls.Add(_windowControls);
-
-        // Tab Bar
+        // ===== TAB BAR =====
         _tabBar = new Panel
         {
             Dock = DockStyle.Top,
-            Height = 36
+            Height = 38,
+            BackColor = _bgColor,
+            Padding = new Padding(10, 8, 10, 0)
         };
 
-        _tabContainer = new Panel
+        _tabContainer = new FlowLayoutPanel
         {
-            Dock = DockStyle.Fill,
-            Padding = new Padding(10, 6, 0, 0)
+            AutoSize = true,
+            FlowDirection = FlowDirection.LeftToRight,
+            WrapContents = false,
+            BackColor = Color.Transparent,
+            Location = new Point(10, 6)
         };
-
-        _addTabBtn = new Button
-        {
-            Text = "+",
-            Size = new Size(24, 24),
-            FlatStyle = FlatStyle.Flat,
-            Font = new Font("Segoe UI", 11),
-            Cursor = Cursors.Hand
-        };
-        _addTabBtn.FlatAppearance.BorderSize = 0;
-        _addTabBtn.Click += (s, e) => CreateNewTab();
-
         _tabBar.Controls.Add(_tabContainer);
 
-        // Editor Container
-        _editorContainer = new Panel
+        // Add tab button (+)
+        _addTabBtn = new Label
+        {
+            Text = "+",
+            Font = new Font("Segoe UI", 14),
+            ForeColor = _textDim,
+            Size = new Size(24, 24),
+            TextAlign = ContentAlignment.MiddleCenter,
+            Cursor = Cursors.Hand
+        };
+        _addTabBtn.Click += (s, e) => CreateNewTab();
+        _addTabBtn.MouseEnter += (s, e) => _addTabBtn.ForeColor = _textColor;
+        _addTabBtn.MouseLeave += (s, e) => _addTabBtn.ForeColor = _textDim;
+
+        // ===== EDITOR PANEL =====
+        _editorPanel = new Panel
         {
             Dock = DockStyle.Fill,
+            BackColor = _editorBg,
             Padding = new Padding(0)
         };
 
-        // Line Numbers Panel
-        _lineNumberPanel = new Panel
-        {
-            Dock = DockStyle.Left,
-            Width = 50
-        };
-
+        // Line numbers
         _lineNumbers = new RichTextBox
         {
-            Dock = DockStyle.Fill,
-            ReadOnly = true,
-            BorderStyle = BorderStyle.None,
-            ScrollBars = RichTextBoxScrollBars.None,
+            Width = 55,
+            Dock = DockStyle.Left,
+            BackColor = _editorBg,
+            ForeColor = _textDim,
             Font = new Font("Consolas", 11),
-            Cursor = Cursors.Arrow,
+            BorderStyle = BorderStyle.None,
+            ReadOnly = true,
+            ScrollBars = RichTextBoxScrollBars.None,
             Text = "1",
-            RightToLeft = RightToLeft.Yes
+            SelectionAlignment = HorizontalAlignment.Right,
+            Cursor = Cursors.Arrow
         };
-        _lineNumbers.Enter += (s, e) => _activeTab?.Editor.Focus();
-        _lineNumberPanel.Controls.Add(_lineNumbers);
+        _lineNumbers.Enter += (s, e) => _currentEditor?.Focus();
+        _editorPanel.Controls.Add(_lineNumbers);
 
-        _editorContainer.Controls.Add(_lineNumberPanel);
-
-        // Toolbar
-        _toolbar = new Panel
+        // ===== TOOLBAR (floating at bottom) =====
+        _toolbarPanel = new Panel
         {
+            Height = 45,
             Dock = DockStyle.Bottom,
-            Height = 50,
-            Padding = new Padding(0)
+            BackColor = _editorBg,
+            Padding = new Padding(0, 8, 0, 8)
         };
 
-        _toolbarInner = new Panel
+        var toolbarInner = new FlowLayoutPanel
         {
-            Height = 36,
+            AutoSize = true,
+            FlowDirection = FlowDirection.LeftToRight,
+            WrapContents = false,
+            BackColor = Color.Transparent,
             Anchor = AnchorStyles.None
         };
 
-        _executeBtn = CreateToolbarButton("▷ Execute", 0);
-        _clearBtn = CreateToolbarButton("🗑 Clear", 1);
-        _openBtn = CreateToolbarButton("📂 Open", 2);
-        _saveBtn = CreateToolbarButton("💾 Save", 3);
-        _attachBtn = CreateToolbarButton("📡 Attach", 4);
-        _killBtn = CreateToolbarButton("⊗ Kill", 5);
+        toolbarInner.Controls.Add(CreateToolbarButton("▷", "Execute"));
+        toolbarInner.Controls.Add(CreateToolbarButton("🗑", "Clear"));
+        toolbarInner.Controls.Add(CreateToolbarButton("📂", "Open"));
+        toolbarInner.Controls.Add(CreateToolbarButton("💾", "Save"));
+        toolbarInner.Controls.Add(CreateToolbarButton("📡", "Attach"));
+        toolbarInner.Controls.Add(CreateToolbarButton("⊗", "Kill"));
 
-        _executeBtn.Click += ExecuteBtn_Click;
-        _clearBtn.Click += ClearBtn_Click;
-        _openBtn.Click += OpenBtn_Click;
-        _saveBtn.Click += SaveBtn_Click;
-        _attachBtn.Click += AttachBtn_Click;
-        _killBtn.Click += KillBtn_Click;
-
-        _toolbarInner.Controls.AddRange(new Control[]
+        _toolbarPanel.Controls.Add(toolbarInner);
+        _toolbarPanel.Resize += (s, e) =>
         {
-            _executeBtn, _clearBtn, _openBtn, _saveBtn, _attachBtn, _killBtn
-        });
+            toolbarInner.Location = new Point(
+                (_toolbarPanel.Width - toolbarInner.Width) / 2,
+                (_toolbarPanel.Height - toolbarInner.Height) / 2
+            );
+        };
 
-        _toolbar.Controls.Add(_toolbarInner);
-        _toolbar.Resize += (s, e) => CenterToolbar();
-
-        // Settings Context Menu (includes palette options)
-        _settingsMenu = new ContextMenuStrip();
-        var paletteSubmenu = new ToolStripMenuItem("🎨 Color Palette");
-        foreach (var palette in ColorPalette.GetAllPalettes())
-        {
-            var item = new ToolStripMenuItem(palette.Name);
-            item.Click += (s, e) => ApplyPalette(palette);
-            paletteSubmenu.DropDownItems.Add(item);
-        }
-        _settingsMenu.Items.Add(paletteSubmenu);
-        _settingsMenu.Items.Add(new ToolStripSeparator());
-        _settingsMenu.Items.Add(new ToolStripMenuItem("ℹ About", null, (s, e) =>
-            MessageBox.Show("Vertex Lua Executor\nVersion 1.0", "About", MessageBoxButtons.OK, MessageBoxIcon.Information)));
-
-        // Add controls to form
-        Controls.Add(_editorContainer);
-        Controls.Add(_toolbar);
+        // Add all to form
+        Controls.Add(_editorPanel);
+        Controls.Add(_toolbarPanel);
         Controls.Add(_tabBar);
         Controls.Add(_titleBar);
 
-        ApplyPalette(_currentPalette);
-
         ResumeLayout(false);
-    }
-
-    private void CenterToolbar()
-    {
-        if (_toolbarInner == null || _toolbar == null) return;
-
-        int totalWidth = 6 * 90 + 5 * 8; // 6 buttons * width + 5 gaps
-        _toolbarInner.Width = totalWidth;
-        _toolbarInner.Location = new Point((_toolbar.Width - totalWidth) / 2, (_toolbar.Height - 36) / 2);
     }
 
     private void LogoPanel_Paint(object? sender, PaintEventArgs e)
     {
         e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
 
-        // Draw stylized "V" with two lines - blue color
-        using var pen = new Pen(Color.FromArgb(0, 122, 204), 3);
-
-        // Left line of V
-        e.Graphics.DrawLine(pen, 8, 8, 20, 32);
-        // Right line of V
-        e.Graphics.DrawLine(pen, 32, 8, 20, 32);
+        // Draw V shape - BLUE
+        using var pen = new Pen(_logoBlue, 3);
+        e.Graphics.DrawLine(pen, 5, 5, 17, 30);
+        e.Graphics.DrawLine(pen, 30, 5, 17, 30);
     }
 
-    private Button CreateWindowButton(string text, int x)
+    private Button CreateTitleButton(string text, int rightOffset)
     {
         var btn = new Button
         {
             Text = text,
-            Size = new Size(40, 40),
-            Location = new Point(x, 0),
+            Size = new Size(45, 45),
+            Location = new Point(rightOffset, 0),
             FlatStyle = FlatStyle.Flat,
-            Font = new Font("Segoe UI", 10),
+            Font = new Font("Segoe UI", 11),
+            ForeColor = _textDim,
+            BackColor = Color.Transparent,
             Cursor = Cursors.Hand
         };
         btn.FlatAppearance.BorderSize = 0;
+        btn.FlatAppearance.MouseOverBackColor = Color.FromArgb(50, 50, 50);
         return btn;
     }
 
-    private Button CreateToolbarButton(string text, int index)
+    private Panel CreateToolbarButton(string icon, string text)
     {
-        var btn = new Button
+        var btn = new Panel
         {
-            Text = text,
-            Size = new Size(90, 32),
-            Location = new Point(index * 98, 2),
-            FlatStyle = FlatStyle.Flat,
-            Font = new Font("Segoe UI", 9),
+            Size = new Size(85, 30),
+            BackColor = Color.FromArgb(50, 50, 50),
             Cursor = Cursors.Hand,
-            TextAlign = ContentAlignment.MiddleCenter
+            Margin = new Padding(4, 0, 4, 0)
         };
-        btn.FlatAppearance.BorderSize = 0;
+
+        // Round corners
+        var path = new GraphicsPath();
+        path.AddArc(0, 0, 10, 10, 180, 90);
+        path.AddArc(btn.Width - 10, 0, 10, 10, 270, 90);
+        path.AddArc(btn.Width - 10, btn.Height - 10, 10, 10, 0, 90);
+        path.AddArc(0, btn.Height - 10, 10, 10, 90, 90);
+        path.CloseFigure();
+        btn.Region = new Region(path);
+
+        var lbl = new Label
+        {
+            Text = $"{icon} {text}",
+            Font = new Font("Segoe UI", 9),
+            ForeColor = _textColor,
+            AutoSize = false,
+            Size = btn.Size,
+            TextAlign = ContentAlignment.MiddleCenter,
+            BackColor = Color.Transparent,
+            Cursor = Cursors.Hand
+        };
+        btn.Controls.Add(lbl);
+
+        btn.MouseEnter += (s, e) => btn.BackColor = Color.FromArgb(70, 70, 70);
+        btn.MouseLeave += (s, e) => btn.BackColor = Color.FromArgb(50, 50, 50);
+        lbl.MouseEnter += (s, e) => btn.BackColor = Color.FromArgb(70, 70, 70);
+        lbl.MouseLeave += (s, e) => btn.BackColor = Color.FromArgb(50, 50, 50);
+
+        // Click handlers
+        Action? clickAction = text switch
+        {
+            "Execute" => () => MessageBox.Show("Execute script", "Execute"),
+            "Clear" => () => _activeTab?.Editor.Clear(),
+            "Open" => OpenFile,
+            "Save" => SaveFile,
+            "Attach" => () => MessageBox.Show("Attach to process", "Attach"),
+            "Kill" => () => MessageBox.Show("Kill execution", "Kill"),
+            _ => null
+        };
+
+        btn.Click += (s, e) => clickAction?.Invoke();
+        lbl.Click += (s, e) => clickAction?.Invoke();
+
         return btn;
     }
 
@@ -298,57 +299,68 @@ public partial class MainForm : Form
             Title = $"New Tab {_tabCounter++}"
         };
 
-        // Create tab header panel
+        // Tab panel
         tab.TabPanel = new Panel
         {
             Size = new Size(130, 26),
-            Margin = new Padding(0, 0, 2, 0),
+            BackColor = _tabBg,
+            Margin = new Padding(0, 0, 4, 0),
             Cursor = Cursors.Hand
         };
-        tab.TabPanel.Paint += (s, e) => PaintTabPanel(e, tab);
+        RoundCorners(tab.TabPanel, 5);
 
-        // Colored circle indicator
+        // Orange circle indicator
         var indicator = new Panel
         {
-            Size = new Size(10, 10),
-            Location = new Point(10, 8),
-            BackColor = Color.FromArgb(255, 140, 50) // Orange indicator like reference
+            Size = new Size(12, 12),
+            Location = new Point(8, 7),
+            BackColor = _accentOrange
         };
-        MakeCircular(indicator);
+        RoundCorners(indicator, 6);
         tab.TabPanel.Controls.Add(indicator);
 
+        // Tab label
         tab.TabLabel = new Label
         {
             Text = tab.Title,
-            Location = new Point(26, 5),
-            Size = new Size(75, 18),
             Font = new Font("Segoe UI", 9),
+            ForeColor = _textColor,
+            Location = new Point(24, 5),
+            AutoSize = true,
+            BackColor = Color.Transparent,
             Cursor = Cursors.Hand
         };
-        tab.TabLabel.Click += (s, e) => SelectTab(tab);
-        tab.TabPanel.Click += (s, e) => SelectTab(tab);
+        tab.TabPanel.Controls.Add(tab.TabLabel);
 
-        tab.CloseButton = new Button
+        // Close button
+        tab.CloseButton = new Label
         {
             Text = "×",
+            Font = new Font("Segoe UI", 11),
+            ForeColor = _textDim,
             Size = new Size(20, 20),
             Location = new Point(106, 3),
-            FlatStyle = FlatStyle.Flat,
-            Font = new Font("Segoe UI", 10),
+            TextAlign = ContentAlignment.MiddleCenter,
             Cursor = Cursors.Hand
         };
-        tab.CloseButton.FlatAppearance.BorderSize = 0;
         tab.CloseButton.Click += (s, e) => CloseTab(tab);
-
-        tab.TabPanel.Controls.Add(tab.TabLabel);
+        tab.CloseButton.MouseEnter += (s, e) => tab.CloseButton.ForeColor = _textColor;
+        tab.CloseButton.MouseLeave += (s, e) => tab.CloseButton.ForeColor = _textDim;
         tab.TabPanel.Controls.Add(tab.CloseButton);
 
-        // Create editor
+        // Click to select
+        tab.TabPanel.Click += (s, e) => SelectTab(tab);
+        tab.TabLabel.Click += (s, e) => SelectTab(tab);
+        indicator.Click += (s, e) => SelectTab(tab);
+
+        // Editor
         tab.Editor = new RichTextBox
         {
             Dock = DockStyle.Fill,
-            BorderStyle = BorderStyle.None,
+            BackColor = _editorBg,
+            ForeColor = _textColor,
             Font = new Font("Consolas", 11),
+            BorderStyle = BorderStyle.None,
             AcceptsTab = true,
             WordWrap = false,
             ScrollBars = RichTextBoxScrollBars.Both
@@ -358,112 +370,92 @@ public partial class MainForm : Form
         tab.Editor.KeyDown += Editor_KeyDown;
 
         _tabs.Add(tab);
-        RefreshTabBar();
+        RefreshTabs();
         SelectTab(tab);
     }
 
-    private void MakeCircular(Panel panel)
+    private void RoundCorners(Control ctrl, int radius)
     {
         var path = new GraphicsPath();
-        path.AddEllipse(0, 0, panel.Width, panel.Height);
-        panel.Region = new Region(path);
-    }
-
-    private void PaintTabPanel(PaintEventArgs e, ScriptTab tab)
-    {
-        var g = e.Graphics;
-        g.SmoothingMode = SmoothingMode.AntiAlias;
-
-        var rect = new Rectangle(0, 0, tab.TabPanel.Width - 1, tab.TabPanel.Height - 1);
-        var bgColor = tab == _activeTab ? _currentPalette.TabActive : _currentPalette.TabInactive;
-
-        using var brush = new SolidBrush(bgColor);
-        using var path = CreateRoundedRectangle(rect, 6);
-        g.FillPath(brush, path);
-    }
-
-    private GraphicsPath CreateRoundedRectangle(Rectangle rect, int radius)
-    {
-        var path = new GraphicsPath();
-        path.AddArc(rect.X, rect.Y, radius * 2, radius * 2, 180, 90);
-        path.AddArc(rect.Right - radius * 2, rect.Y, radius * 2, radius * 2, 270, 90);
-        path.AddArc(rect.Right - radius * 2, rect.Bottom - radius * 2, radius * 2, radius * 2, 0, 90);
-        path.AddArc(rect.X, rect.Bottom - radius * 2, radius * 2, radius * 2, 90, 90);
+        path.AddArc(0, 0, radius * 2, radius * 2, 180, 90);
+        path.AddArc(ctrl.Width - radius * 2, 0, radius * 2, radius * 2, 270, 90);
+        path.AddArc(ctrl.Width - radius * 2, ctrl.Height - radius * 2, radius * 2, radius * 2, 0, 90);
+        path.AddArc(0, ctrl.Height - radius * 2, radius * 2, radius * 2, 90, 90);
         path.CloseFigure();
-        return path;
+        ctrl.Region = new Region(path);
     }
 
     private void SelectTab(ScriptTab tab)
     {
         if (_activeTab == tab) return;
 
-        // Hide current editor
         if (_activeTab != null)
         {
-            _editorContainer.Controls.Remove(_activeTab.Editor);
+            _editorPanel.Controls.Remove(_activeTab.Editor);
+            _activeTab.TabPanel.BackColor = Color.FromArgb(30, 30, 30);
         }
 
         _activeTab = tab;
+        _currentEditor = tab.Editor;
 
-        // Show new editor
-        _editorContainer.Controls.Add(tab.Editor);
+        _editorPanel.Controls.Add(tab.Editor);
         tab.Editor.BringToFront();
+        tab.TabPanel.BackColor = _tabBg;
 
-        // Update highlighter
-        _highlighter = new LuaSyntaxHighlighter(tab.Editor, _currentPalette);
+        _highlighter = new LuaSyntaxHighlighter(tab.Editor, CreatePalette());
         _highlighter.HighlightAll();
 
         UpdateLineNumbers();
-        RefreshTabBar();
         tab.Editor.Focus();
+    }
+
+    private ColorPalette CreatePalette()
+    {
+        return new ColorPalette
+        {
+            TextColor = _textColor,
+            SyntaxKeyword = _syntaxKeyword,
+            SyntaxString = _syntaxString,
+            SyntaxComment = _syntaxComment,
+            SyntaxNumber = _syntaxNumber,
+            SyntaxFunction = _textColor,
+            SyntaxOperator = _textColor
+        };
     }
 
     private void CloseTab(ScriptTab tab)
     {
         if (_tabs.Count == 1)
         {
-            // Don't close the last tab, just clear it
             tab.Editor.Clear();
             tab.Title = "New Tab 1";
-            tab.FilePath = null;
-            tab.IsModified = false;
-            RefreshTabBar();
+            tab.TabLabel.Text = tab.Title;
             return;
         }
 
-        int index = _tabs.IndexOf(tab);
+        int idx = _tabs.IndexOf(tab);
         _tabs.Remove(tab);
         _tabContainer.Controls.Remove(tab.TabPanel);
 
         if (_activeTab == tab)
         {
-            SelectTab(_tabs[Math.Min(index, _tabs.Count - 1)]);
+            SelectTab(_tabs[Math.Min(idx, _tabs.Count - 1)]);
         }
 
-        RefreshTabBar();
+        RefreshTabs();
     }
 
-    private void RefreshTabBar()
+    private void RefreshTabs()
     {
         _tabContainer.Controls.Clear();
 
-        int x = 10;
         foreach (var tab in _tabs)
         {
             tab.TabLabel.Text = tab.DisplayTitle;
-            tab.TabPanel.Location = new Point(x, 5);
-            tab.TabPanel.BackColor = Color.Transparent;
-            tab.TabLabel.ForeColor = _currentPalette.TextColor;
-            tab.CloseButton.ForeColor = _currentPalette.TextSecondary;
-            tab.CloseButton.BackColor = Color.Transparent;
-            tab.TabPanel.Invalidate();
+            tab.TabPanel.BackColor = tab == _activeTab ? _tabBg : Color.FromArgb(30, 30, 30);
             _tabContainer.Controls.Add(tab.TabPanel);
-            x += tab.TabPanel.Width + 4;
         }
 
-        _addTabBtn.Location = new Point(x + 5, 1);  // Move up to align with tabs
-        _addTabBtn.BackColor = Color.Transparent;
-        _addTabBtn.ForeColor = _currentPalette.TextSecondary;
         _tabContainer.Controls.Add(_addTabBtn);
     }
 
@@ -471,103 +463,22 @@ public partial class MainForm : Form
     {
         if (_activeTab == null) return;
 
-        int lineCount = _activeTab.Editor.Lines.Length;
-        if (lineCount == 0) lineCount = 1;
-
-        string numbers = string.Join("\n", Enumerable.Range(1, lineCount));
-        if (_lineNumbers.Text != numbers)
+        int count = Math.Max(1, _activeTab.Editor.Lines.Length);
+        string nums = string.Join("\n", Enumerable.Range(1, count));
+        if (_lineNumbers.Text != nums)
         {
-            _lineNumbers.Text = numbers;
+            _lineNumbers.Text = nums;
         }
     }
 
-    private void ApplyPalette(ColorPalette palette)
+    private void ToggleMaximize()
     {
-        _currentPalette = palette;
-
-        // Form - use pure black for background
-        BackColor = Color.FromArgb(15, 15, 15);
-
-        // Title bar
-        _titleBar.BackColor = Color.FromArgb(15, 15, 15);
-        _logoPanel.Invalidate();
-
-        // Settings button
-        _settingsBtn.BackColor = Color.FromArgb(15, 15, 15);
-        _settingsBtn.ForeColor = _currentPalette.TextSecondary;
-        _settingsBtn.FlatAppearance.MouseOverBackColor = _currentPalette.ButtonHover;
-
-        // Window controls
-        foreach (Control ctrl in _windowControls.Controls)
-        {
-            if (ctrl is Button btn && ctrl != _settingsBtn)
-            {
-                btn.BackColor = Color.FromArgb(15, 15, 15);
-                btn.ForeColor = _currentPalette.TextSecondary;
-                btn.FlatAppearance.MouseOverBackColor = _currentPalette.ButtonHover;
-            }
-        }
-
-        // Tab bar - slightly lighter
-        _tabBar.BackColor = Color.FromArgb(25, 25, 25);
-        _tabContainer.BackColor = Color.FromArgb(25, 25, 25);
-
-        // Editor - pure black like reference
-        _editorContainer.BackColor = Color.FromArgb(15, 15, 15);
-        _lineNumberPanel.BackColor = Color.FromArgb(15, 15, 15);
-        _lineNumbers.BackColor = Color.FromArgb(15, 15, 15);
-        _lineNumbers.ForeColor = Color.FromArgb(80, 80, 80); // Dimmer line numbers
-
-        foreach (var tab in _tabs)
-        {
-            tab.Editor.BackColor = Color.FromArgb(15, 15, 15);
-            tab.Editor.ForeColor = _currentPalette.TextColor;
-        }
-
-        // Toolbar - same as form background
-        _toolbar.BackColor = Color.FromArgb(25, 25, 25);
-        _toolbarInner.BackColor = Color.FromArgb(25, 25, 25);
-
-        ApplyToolbarButtonStyle(_executeBtn);
-        ApplyToolbarButtonStyle(_clearBtn);
-        ApplyToolbarButtonStyle(_openBtn);
-        ApplyToolbarButtonStyle(_saveBtn);
-        ApplyToolbarButtonStyle(_attachBtn);
-        ApplyToolbarButtonStyle(_killBtn);
-
-        // Refresh tabs and syntax highlighting
-        RefreshTabBar();
-
-        if (_activeTab != null)
-        {
-            _highlighter?.UpdatePalette(palette);
-            _highlighter?.HighlightAll();
-        }
-
-        Invalidate();
+        WindowState = WindowState == FormWindowState.Maximized
+            ? FormWindowState.Normal
+            : FormWindowState.Maximized;
     }
 
-    private void ApplyToolbarButtonStyle(Button btn)
-    {
-        btn.BackColor = Color.FromArgb(45, 45, 45);
-        btn.ForeColor = _currentPalette.TextColor;
-        btn.FlatAppearance.BorderColor = Color.FromArgb(45, 45, 45);
-        btn.FlatAppearance.MouseOverBackColor = Color.FromArgb(65, 65, 65);
-        btn.FlatAppearance.MouseDownBackColor = Color.FromArgb(75, 75, 75);
-
-        // Round the buttons
-        var path = new GraphicsPath();
-        var rect = new Rectangle(0, 0, btn.Width, btn.Height);
-        int radius = 8;
-        path.AddArc(rect.X, rect.Y, radius * 2, radius * 2, 180, 90);
-        path.AddArc(rect.Right - radius * 2, rect.Y, radius * 2, radius * 2, 270, 90);
-        path.AddArc(rect.Right - radius * 2, rect.Bottom - radius * 2, radius * 2, radius * 2, 0, 90);
-        path.AddArc(rect.X, rect.Bottom - radius * 2, radius * 2, radius * 2, 90, 90);
-        path.CloseFigure();
-        btn.Region = new Region(path);
-    }
-
-    #region Title Bar Dragging
+    #region Events
 
     private void TitleBar_MouseDown(object? sender, MouseEventArgs e)
     {
@@ -582,59 +493,36 @@ public partial class MainForm : Form
     {
         if (_isDragging)
         {
-            Point current = PointToScreen(e.Location);
-            Location = new Point(current.X - _dragStart.X - _titleBar.Left,
-                                current.Y - _dragStart.Y - _titleBar.Top);
+            var pt = PointToScreen(e.Location);
+            Location = new Point(pt.X - _dragStart.X, pt.Y - _dragStart.Y);
         }
     }
 
-    private void TitleBar_MouseUp(object? sender, MouseEventArgs e)
-    {
-        _isDragging = false;
-    }
-
-    private void TitleBar_DoubleClick(object? sender, EventArgs e)
-    {
-        WindowState = WindowState == FormWindowState.Maximized
-            ? FormWindowState.Normal
-            : FormWindowState.Maximized;
-    }
-
-    #endregion
-
-    #region Editor Events
+    private void TitleBar_MouseUp(object? sender, MouseEventArgs e) => _isDragging = false;
 
     private void Editor_TextChanged(object? sender, EventArgs e)
     {
         if (_activeTab == null) return;
-
         _activeTab.IsModified = true;
         UpdateLineNumbers();
-        RefreshTabBar();
 
-        // Highlight current line for performance
-        int lineIndex = _activeTab.Editor.GetLineFromCharIndex(_activeTab.Editor.SelectionStart);
-        _highlighter?.HighlightLine(lineIndex);
+        int line = _activeTab.Editor.GetLineFromCharIndex(_activeTab.Editor.SelectionStart);
+        _highlighter?.HighlightLine(line);
     }
 
     private void Editor_VScroll(object? sender, EventArgs e)
     {
         if (_activeTab == null) return;
 
-        // Sync line numbers scroll with editor
-        int firstVisibleChar = _activeTab.Editor.GetCharIndexFromPosition(new Point(0, 0));
-        int firstVisibleLine = _activeTab.Editor.GetLineFromCharIndex(firstVisibleChar);
+        int firstChar = _activeTab.Editor.GetCharIndexFromPosition(new Point(0, 0));
+        int firstLine = _activeTab.Editor.GetLineFromCharIndex(firstChar);
 
-        _lineNumbers.SelectionStart = 0;
-        _lineNumbers.ScrollToCaret();
-
-        // Approximate scroll sync
-        if (firstVisibleLine > 0)
+        if (firstLine > 0 && firstLine < _lineNumbers.Lines.Length)
         {
-            int charIndex = _lineNumbers.GetFirstCharIndexFromLine(Math.Min(firstVisibleLine, _lineNumbers.Lines.Length - 1));
-            if (charIndex >= 0)
+            int charIdx = _lineNumbers.GetFirstCharIndexFromLine(firstLine);
+            if (charIdx >= 0)
             {
-                _lineNumbers.SelectionStart = charIndex;
+                _lineNumbers.SelectionStart = charIdx;
                 _lineNumbers.ScrollToCaret();
             }
         }
@@ -644,176 +532,88 @@ public partial class MainForm : Form
     {
         if (_activeTab == null) return;
 
-        // Handle Tab key
         if (e.KeyCode == Keys.Tab)
         {
             e.SuppressKeyPress = true;
-            int selStart = _activeTab.Editor.SelectionStart;
-            _activeTab.Editor.SelectedText = "    "; // 4 spaces
-            _activeTab.Editor.SelectionStart = selStart + 4;
+            _activeTab.Editor.SelectedText = "    ";
         }
-
-        // Ctrl+S to save
-        if (e.Control && e.KeyCode == Keys.S)
+        else if (e.Control && e.KeyCode == Keys.S)
         {
             e.SuppressKeyPress = true;
-            SaveBtn_Click(sender, e);
+            SaveFile();
         }
-
-        // Ctrl+O to open
-        if (e.Control && e.KeyCode == Keys.O)
+        else if (e.Control && e.KeyCode == Keys.O)
         {
             e.SuppressKeyPress = true;
-            OpenBtn_Click(sender, e);
+            OpenFile();
         }
-
-        // Ctrl+N for new tab
-        if (e.Control && e.KeyCode == Keys.N)
+        else if (e.Control && e.KeyCode == Keys.N)
         {
             e.SuppressKeyPress = true;
             CreateNewTab();
         }
-
-        // Ctrl+W to close tab
-        if (e.Control && e.KeyCode == Keys.W)
+        else if (e.Control && e.KeyCode == Keys.W)
         {
             e.SuppressKeyPress = true;
-            if (_activeTab != null)
-            {
-                CloseTab(_activeTab);
-            }
+            if (_activeTab != null) CloseTab(_activeTab);
         }
     }
 
-    #endregion
-
-    #region Toolbar Events
-
-    private void ExecuteBtn_Click(object? sender, EventArgs e)
+    private void OpenFile()
     {
-        if (_activeTab == null) return;
-
-        // Placeholder - Execute would connect to Lua runtime
-        MessageBox.Show("Execute: Script execution would happen here.\n\nTo integrate with your Lua runtime, modify the ExecuteBtn_Click method.",
-            "Execute", MessageBoxButtons.OK, MessageBoxIcon.Information);
-    }
-
-    private void ClearBtn_Click(object? sender, EventArgs e)
-    {
-        if (_activeTab != null)
+        using var dlg = new OpenFileDialog
         {
-            _activeTab.Editor.Clear();
-            _activeTab.IsModified = true;
-            RefreshTabBar();
-        }
-    }
-
-    private void OpenBtn_Click(object? sender, EventArgs e)
-    {
-        using var dialog = new OpenFileDialog
-        {
-            Filter = "Lua Scripts (*.lua)|*.lua|All Files (*.*)|*.*",
-            Title = "Open Lua Script"
+            Filter = "Lua Scripts (*.lua)|*.lua|All Files (*.*)|*.*"
         };
 
-        if (dialog.ShowDialog() == DialogResult.OK)
+        if (dlg.ShowDialog() == DialogResult.OK)
         {
-            try
+            string content = File.ReadAllText(dlg.FileName);
+
+            if (_activeTab != null && string.IsNullOrEmpty(_activeTab.Editor.Text))
             {
-                string content = File.ReadAllText(dialog.FileName);
-
-                if (_activeTab != null && string.IsNullOrEmpty(_activeTab.Editor.Text) && !_activeTab.IsModified)
-                {
-                    // Use current empty tab
-                    _activeTab.Editor.Text = content;
-                    _activeTab.FilePath = dialog.FileName;
-                    _activeTab.Title = Path.GetFileName(dialog.FileName);
-                    _activeTab.IsModified = false;
-                }
-                else
-                {
-                    // Create new tab
-                    CreateNewTab();
-                    _activeTab!.Editor.Text = content;
-                    _activeTab.FilePath = dialog.FileName;
-                    _activeTab.Title = Path.GetFileName(dialog.FileName);
-                    _activeTab.IsModified = false;
-                }
-
-                _highlighter?.HighlightAll();
-                RefreshTabBar();
-            }
-            catch (Exception ex)
-            {
-                MessageBox.Show($"Error opening file: {ex.Message}", "Error",
-                    MessageBoxButtons.OK, MessageBoxIcon.Error);
-            }
-        }
-    }
-
-    private void SaveBtn_Click(object? sender, EventArgs e)
-    {
-        if (_activeTab == null) return;
-
-        string? filePath = _activeTab.FilePath;
-
-        if (string.IsNullOrEmpty(filePath))
-        {
-            using var dialog = new SaveFileDialog
-            {
-                Filter = "Lua Scripts (*.lua)|*.lua|All Files (*.*)|*.*",
-                Title = "Save Lua Script",
-                DefaultExt = "lua"
-            };
-
-            if (dialog.ShowDialog() == DialogResult.OK)
-            {
-                filePath = dialog.FileName;
+                _activeTab.Editor.Text = content;
+                _activeTab.FilePath = dlg.FileName;
+                _activeTab.Title = Path.GetFileName(dlg.FileName);
             }
             else
             {
-                return;
+                CreateNewTab();
+                _activeTab!.Editor.Text = content;
+                _activeTab.FilePath = dlg.FileName;
+                _activeTab.Title = Path.GetFileName(dlg.FileName);
             }
-        }
 
-        try
-        {
-            File.WriteAllText(filePath, _activeTab.Editor.Text);
-            _activeTab.FilePath = filePath;
-            _activeTab.Title = Path.GetFileName(filePath);
-            _activeTab.IsModified = false;
-            RefreshTabBar();
-        }
-        catch (Exception ex)
-        {
-            MessageBox.Show($"Error saving file: {ex.Message}", "Error",
-                MessageBoxButtons.OK, MessageBoxIcon.Error);
+            _highlighter?.HighlightAll();
+            RefreshTabs();
         }
     }
 
-    private void AttachBtn_Click(object? sender, EventArgs e)
+    private void SaveFile()
     {
-        // Placeholder - Attach would connect to a process
-        MessageBox.Show("Attach: Process attachment would happen here.\n\nTo integrate with your injection system, modify the AttachBtn_Click method.",
-            "Attach", MessageBoxButtons.OK, MessageBoxIcon.Information);
-    }
+        if (_activeTab == null) return;
 
-    private void KillBtn_Click(object? sender, EventArgs e)
-    {
-        // Placeholder - Kill would terminate execution
-        MessageBox.Show("Kill: Script termination would happen here.\n\nTo integrate with your Lua runtime, modify the KillBtn_Click method.",
-            "Kill", MessageBoxButtons.OK, MessageBoxIcon.Information);
-    }
+        string? path = _activeTab.FilePath;
 
-    private void SettingsBtn_Click(object? sender, EventArgs e)
-    {
-        using var paletteForm = new PaletteForm(_currentPalette);
-        paletteForm.ShowDialog(this);
-
-        if (paletteForm.SelectedPalette != null)
+        if (string.IsNullOrEmpty(path))
         {
-            ApplyPalette(paletteForm.SelectedPalette);
+            using var dlg = new SaveFileDialog
+            {
+                Filter = "Lua Scripts (*.lua)|*.lua|All Files (*.*)|*.*",
+                DefaultExt = "lua"
+            };
+
+            if (dlg.ShowDialog() == DialogResult.OK)
+                path = dlg.FileName;
+            else
+                return;
         }
+
+        File.WriteAllText(path, _activeTab.Editor.Text);
+        _activeTab.FilePath = path;
+        _activeTab.Title = Path.GetFileName(path);
+        _activeTab.IsModified = false;
+        RefreshTabs();
     }
 
     #endregion
@@ -821,16 +621,7 @@ public partial class MainForm : Form
     protected override void OnPaint(PaintEventArgs e)
     {
         base.OnPaint(e);
-
-        // Draw subtle border
-        using var pen = new Pen(Color.FromArgb(40, 40, 40), 1);
+        using var pen = new Pen(Color.FromArgb(50, 50, 50), 1);
         e.Graphics.DrawRectangle(pen, 0, 0, Width - 1, Height - 1);
-    }
-
-    protected override void OnResize(EventArgs e)
-    {
-        base.OnResize(e);
-        CenterToolbar();
-        Invalidate();
     }
 }

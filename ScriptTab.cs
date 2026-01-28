@@ -8,7 +8,7 @@ public class ScriptTab
     public bool IsModified { get; set; }
     public Panel TabPanel { get; set; } = null!;
     public Label TabLabel { get; set; } = null!;
-    public Button CloseButton { get; set; } = null!;
+    public Label CloseButton { get; set; } = null!;
     public RichTextBox Editor { get; set; } = null!;
 
     public string DisplayTitle => IsModified ? Title + " *" : Title;
