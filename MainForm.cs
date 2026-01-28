@@ -240,6 +240,8 @@ public partial class MainForm : Form
 
     private void CenterToolbar()
     {
+        if (_toolbarInner == null || _toolbar == null) return;
+
         int totalWidth = 6 * 90 + 5 * 8; // 6 buttons * width + 5 gaps
         _toolbarInner.Width = totalWidth;
         _toolbarInner.Location = new Point((_toolbar.Width - totalWidth) / 2, (_toolbar.Height - 36) / 2);
