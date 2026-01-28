@@ -461,7 +461,7 @@ public partial class MainForm : Form
             x += tab.TabPanel.Width + 4;
         }
 
-        _addTabBtn.Location = new Point(x + 5, 6);
+        _addTabBtn.Location = new Point(x + 5, 1);  // Move up to align with tabs
         _addTabBtn.BackColor = Color.Transparent;
         _addTabBtn.ForeColor = _currentPalette.TextSecondary;
         _tabContainer.Controls.Add(_addTabBtn);
@@ -512,15 +512,15 @@ public partial class MainForm : Form
         _tabBar.BackColor = Color.FromArgb(25, 25, 25);
         _tabContainer.BackColor = Color.FromArgb(25, 25, 25);
 
-        // Editor - darker
-        _editorContainer.BackColor = Color.FromArgb(20, 20, 20);
-        _lineNumberPanel.BackColor = Color.FromArgb(20, 20, 20);
-        _lineNumbers.BackColor = Color.FromArgb(20, 20, 20);
-        _lineNumbers.ForeColor = Color.FromArgb(100, 100, 100); // Dimmer line numbers
+        // Editor - pure black like reference
+        _editorContainer.BackColor = Color.FromArgb(15, 15, 15);
+        _lineNumberPanel.BackColor = Color.FromArgb(15, 15, 15);
+        _lineNumbers.BackColor = Color.FromArgb(15, 15, 15);
+        _lineNumbers.ForeColor = Color.FromArgb(80, 80, 80); // Dimmer line numbers
 
         foreach (var tab in _tabs)
         {
-            tab.Editor.BackColor = Color.FromArgb(20, 20, 20);
+            tab.Editor.BackColor = Color.FromArgb(15, 15, 15);
             tab.Editor.ForeColor = _currentPalette.TextColor;
         }
 
@@ -807,7 +807,13 @@ public partial class MainForm : Form
 
     private void SettingsBtn_Click(object? sender, EventArgs e)
     {
-        _settingsMenu.Show(_settingsBtn, new Point(0, _settingsBtn.Height));
+        using var paletteForm = new PaletteForm(_currentPalette);
+        paletteForm.ShowDialog(this);
+
+        if (paletteForm.SelectedPalette != null)
+        {
+            ApplyPalette(paletteForm.SelectedPalette);
+        }
     }
 
     #endregion

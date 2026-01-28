@@ -26,23 +26,24 @@ public class ColorPalette
     public static ColorPalette DefaultDark => new ColorPalette
     {
         Name = "Default Dark",
-        BackgroundDark = Color.FromArgb(18, 18, 18),
-        BackgroundMedium = Color.FromArgb(30, 30, 30),
-        BackgroundLight = Color.FromArgb(45, 45, 45),
+        BackgroundDark = Color.FromArgb(10, 10, 10),
+        BackgroundMedium = Color.FromArgb(20, 20, 20),
+        BackgroundLight = Color.FromArgb(18, 18, 18),
         AccentColor = Color.FromArgb(0, 122, 204),
         TextColor = Color.FromArgb(220, 220, 220),
-        TextSecondary = Color.FromArgb(150, 150, 150),
-        ButtonBackground = Color.FromArgb(60, 60, 60),
-        ButtonHover = Color.FromArgb(80, 80, 80),
-        TabActive = Color.FromArgb(45, 45, 45),
-        TabInactive = Color.FromArgb(30, 30, 30),
-        BorderColor = Color.FromArgb(60, 60, 60),
-        SyntaxKeyword = Color.FromArgb(86, 156, 214),
-        SyntaxString = Color.FromArgb(206, 145, 120),
-        SyntaxComment = Color.FromArgb(106, 153, 85),
-        SyntaxNumber = Color.FromArgb(181, 206, 168),
-        SyntaxFunction = Color.FromArgb(220, 220, 170),
-        SyntaxOperator = Color.FromArgb(180, 180, 180)
+        TextSecondary = Color.FromArgb(120, 120, 120),
+        ButtonBackground = Color.FromArgb(45, 45, 45),
+        ButtonHover = Color.FromArgb(65, 65, 65),
+        TabActive = Color.FromArgb(35, 35, 35),
+        TabInactive = Color.FromArgb(25, 25, 25),
+        BorderColor = Color.FromArgb(50, 50, 50),
+        // Syntax colors matching reference: red keywords, pink strings
+        SyntaxKeyword = Color.FromArgb(248, 90, 90),      // Red/coral for keywords
+        SyntaxString = Color.FromArgb(255, 180, 200),     // Pink for strings
+        SyntaxComment = Color.FromArgb(90, 90, 90),       // Gray for comments
+        SyntaxNumber = Color.FromArgb(220, 220, 220),     // White for numbers
+        SyntaxFunction = Color.FromArgb(220, 220, 220),   // White for function names
+        SyntaxOperator = Color.FromArgb(220, 220, 220)    // White for operators
     };
 
     public static ColorPalette BluePurple => new ColorPalette
