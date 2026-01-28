@@ -11,7 +11,8 @@ public partial class MainForm : Form
 
     // UI Components
     private Panel _titleBar = null!;
-    private Label _logoLabel = null!;
+    private Panel _logoPanel = null!;
+    private Button _settingsBtn = null!;
     private Panel _windowControls = null!;
     private Button _minimizeBtn = null!;
     private Button _maximizeBtn = null!;
@@ -26,15 +27,16 @@ public partial class MainForm : Form
     private RichTextBox _lineNumbers = null!;
 
     private Panel _toolbar = null!;
+    private Panel _toolbarInner = null!;
     private Button _executeBtn = null!;
     private Button _clearBtn = null!;
     private Button _openBtn = null!;
     private Button _saveBtn = null!;
     private Button _attachBtn = null!;
     private Button _killBtn = null!;
-    private Button _paletteBtn = null!;
 
     private ContextMenuStrip _paletteMenu = null!;
+    private ContextMenuStrip _settingsMenu = null!;
 
     private LuaSyntaxHighlighter? _highlighter;
     private bool _isDragging;
@@ -63,38 +65,49 @@ public partial class MainForm : Form
         _titleBar = new Panel
         {
             Dock = DockStyle.Top,
-            Height = 35
+            Height = 40
         };
         _titleBar.MouseDown += TitleBar_MouseDown;
         _titleBar.MouseMove += TitleBar_MouseMove;
         _titleBar.MouseUp += TitleBar_MouseUp;
         _titleBar.DoubleClick += TitleBar_DoubleClick;
 
-        // Logo
-        _logoLabel = new Label
+        // Logo Panel (draws the stylized V)
+        _logoPanel = new Panel
         {
-            Text = "V",
-            Font = new Font("Segoe UI", 18, FontStyle.Bold),
-            ForeColor = Color.FromArgb(0, 122, 204), // Blue V
-            Location = new Point(10, 3),
-            AutoSize = true
+            Size = new Size(40, 40),
+            Location = new Point(5, 0)
         };
-        _logoLabel.MouseDown += TitleBar_MouseDown;
-        _logoLabel.MouseMove += TitleBar_MouseMove;
-        _logoLabel.MouseUp += TitleBar_MouseUp;
-        _titleBar.Controls.Add(_logoLabel);
+        _logoPanel.Paint += LogoPanel_Paint;
+        _logoPanel.MouseDown += TitleBar_MouseDown;
+        _logoPanel.MouseMove += TitleBar_MouseMove;
+        _logoPanel.MouseUp += TitleBar_MouseUp;
+        _titleBar.Controls.Add(_logoPanel);
 
-        // Window Controls
+        // Window Controls Panel
         _windowControls = new Panel
         {
             Dock = DockStyle.Right,
-            Width = 140
+            Width = 180
         };
 
-        _minimizeBtn = CreateWindowButton("─", 0);
+        // Settings button (gear icon)
+        _settingsBtn = new Button
+        {
+            Text = "⚙",
+            Size = new Size(40, 40),
+            Location = new Point(0, 0),
+            FlatStyle = FlatStyle.Flat,
+            Font = new Font("Segoe UI", 14),
+            Cursor = Cursors.Hand
+        };
+        _settingsBtn.FlatAppearance.BorderSize = 0;
+        _settingsBtn.Click += SettingsBtn_Click;
+
+        _minimizeBtn = CreateWindowButton("─", 46);
         _minimizeBtn.Click += (s, e) => WindowState = FormWindowState.Minimized;
 
-        _maximizeBtn = CreateWindowButton("□", 46);
+        _maximizeBtn = CreateWindowButton("□", 92);
         _maximizeBtn.Click += (s, e) =>
         {
             WindowState = WindowState == FormWindowState.Maximized
@@ -102,31 +115,31 @@ public partial class MainForm : Form
                 : FormWindowState.Maximized;
         };
 
-        _closeBtn = CreateWindowButton("✕", 92);
+        _closeBtn = CreateWindowButton("✕", 138);
         _closeBtn.Click += (s, e) => Close();
 
-        _windowControls.Controls.AddRange(new Control[] { _minimizeBtn, _maximizeBtn, _closeBtn });
+        _windowControls.Controls.AddRange(new Control[] { _settingsBtn, _minimizeBtn, _maximizeBtn, _closeBtn });
         _titleBar.Controls.Add(_windowControls);
 
         // Tab Bar
         _tabBar = new Panel
         {
             Dock = DockStyle.Top,
-            Height = 32
+            Height = 36
         };
 
         _tabContainer = new Panel
         {
             Dock = DockStyle.Fill,
-            Padding = new Padding(5, 5, 0, 0)
+            Padding = new Padding(10, 6, 0, 0)
         };
 
         _addTabBtn = new Button
         {
             Text = "+",
-            Size = new Size(28, 24),
+            Size = new Size(24, 24),
             FlatStyle = FlatStyle.Flat,
-            Font = new Font("Segoe UI", 12),
+            Font = new Font("Segoe UI", 11),
             Cursor = Cursors.Hand
         };
         _addTabBtn.FlatAppearance.BorderSize = 0;
@@ -138,14 +151,14 @@ public partial class MainForm : Form
         _editorContainer = new Panel
         {
             Dock = DockStyle.Fill,
-            Padding = new Padding(10, 5, 10, 5)
+            Padding = new Padding(0)
         };
 
         // Line Numbers Panel
         _lineNumberPanel = new Panel
         {
             Dock = DockStyle.Left,
-            Width = 45
+            Width = 50
         };
 
         _lineNumbers = new RichTextBox
@@ -156,7 +169,8 @@ public partial class MainForm : Form
             ScrollBars = RichTextBoxScrollBars.None,
             Font = new Font("Consolas", 11),
             Cursor = Cursors.Arrow,
-            Text = "1"
+            Text = "1",
+            RightToLeft = RightToLeft.Yes
         };
         _lineNumbers.Enter += (s, e) => _activeTab?.Editor.Focus();
         _lineNumberPanel.Controls.Add(_lineNumbers);
@@ -167,24 +181,22 @@ public partial class MainForm : Form
         _toolbar = new Panel
         {
             Dock = DockStyle.Bottom,
-            Height = 45,
-            Padding = new Padding(10, 8, 10, 8)
+            Height = 50,
+            Padding = new Padding(0)
         };
 
-        var toolbarFlow = new FlowLayoutPanel
+        _toolbarInner = new Panel
         {
-            Dock = DockStyle.Fill,
-            FlowDirection = FlowDirection.LeftToRight,
-            WrapContents = false
+            Height = 36,
+            Anchor = AnchorStyles.None
         };
 
-        _executeBtn = CreateToolbarButton("Execute");
-        _clearBtn = CreateToolbarButton("Clear");
-        _openBtn = CreateToolbarButton("Open");
-        _saveBtn = CreateToolbarButton("Save");
-        _attachBtn = CreateToolbarButton("Attach");
-        _killBtn = CreateToolbarButton("Kill");
-        _paletteBtn = CreateToolbarButton("Palette");
+        _executeBtn = CreateToolbarButton("▷ Execute", 0);
+        _clearBtn = CreateToolbarButton("🗑 Clear", 1);
+        _openBtn = CreateToolbarButton("📂 Open", 2);
+        _saveBtn = CreateToolbarButton("💾 Save", 3);
+        _attachBtn = CreateToolbarButton("📡 Attach", 4);
+        _killBtn = CreateToolbarButton("⊗ Kill", 5);
 
         _executeBtn.Click += ExecuteBtn_Click;
         _clearBtn.Click += ClearBtn_Click;
@@ -192,22 +204,28 @@ public partial class MainForm : Form
         _saveBtn.Click += SaveBtn_Click;
         _attachBtn.Click += AttachBtn_Click;
         _killBtn.Click += KillBtn_Click;
-        _paletteBtn.Click += PaletteBtn_Click;
 
-        toolbarFlow.Controls.AddRange(new Control[]
+        _toolbarInner.Controls.AddRange(new Control[]
         {
-            _executeBtn, _clearBtn, _openBtn, _saveBtn, _attachBtn, _killBtn, _paletteBtn
+            _executeBtn, _clearBtn, _openBtn, _saveBtn, _attachBtn, _killBtn
         });
-        _toolbar.Controls.Add(toolbarFlow);
 
-        // Palette Context Menu
-        _paletteMenu = new ContextMenuStrip();
+        _toolbar.Controls.Add(_toolbarInner);
+        _toolbar.Resize += (s, e) => CenterToolbar();
+
+        // Settings Context Menu (includes palette options)
+        _settingsMenu = new ContextMenuStrip();
+        var paletteSubmenu = new ToolStripMenuItem("🎨 Color Palette");
         foreach (var palette in ColorPalette.GetAllPalettes())
         {
             var item = new ToolStripMenuItem(palette.Name);
             item.Click += (s, e) => ApplyPalette(palette);
-            _paletteMenu.Items.Add(item);
+            paletteSubmenu.DropDownItems.Add(item);
         }
+        _settingsMenu.Items.Add(paletteSubmenu);
+        _settingsMenu.Items.Add(new ToolStripSeparator());
+        _settingsMenu.Items.Add(new ToolStripMenuItem("ℹ About", null, (s, e) =>
+            MessageBox.Show("Vertex Lua Executor\nVersion 1.0", "About", MessageBoxButtons.OK, MessageBoxIcon.Information)));
 
         // Add controls to form
         Controls.Add(_editorContainer);
@@ -220,12 +238,32 @@ public partial class MainForm : Form
         ResumeLayout(false);
     }
 
+    private void CenterToolbar()
+    {
+        int totalWidth = 6 * 90 + 5 * 8; // 6 buttons * width + 5 gaps
+        _toolbarInner.Width = totalWidth;
+        _toolbarInner.Location = new Point((_toolbar.Width - totalWidth) / 2, (_toolbar.Height - 36) / 2);
+    }
+
+    private void LogoPanel_Paint(object? sender, PaintEventArgs e)
+    {
+        e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
+
+        // Draw stylized "V" with two lines - blue color
+        using var pen = new Pen(Color.FromArgb(0, 122, 204), 3);
+
+        // Left line of V
+        e.Graphics.DrawLine(pen, 8, 8, 20, 32);
+        // Right line of V
+        e.Graphics.DrawLine(pen, 32, 8, 20, 32);
+    }
+
     private Button CreateWindowButton(string text, int x)
     {
         var btn = new Button
         {
             Text = text,
-            Size = new Size(46, 35),
+            Size = new Size(40, 40),
             Location = new Point(x, 0),
             FlatStyle = FlatStyle.Flat,
             Font = new Font("Segoe UI", 10),
@@ -235,18 +273,19 @@ public partial class MainForm : Form
         return btn;
     }
 
-    private Button CreateToolbarButton(string text)
+    private Button CreateToolbarButton(string text, int index)
     {
         var btn = new Button
         {
             Text = text,
-            Size = new Size(75, 28),
+            Size = new Size(90, 32),
+            Location = new Point(index * 98, 2),
             FlatStyle = FlatStyle.Flat,
             Font = new Font("Segoe UI", 9),
             Cursor = Cursors.Hand,
-            Margin = new Padding(0, 0, 8, 0)
+            TextAlign = ContentAlignment.MiddleCenter
         };
-        btn.FlatAppearance.BorderSize = 1;
+        btn.FlatAppearance.BorderSize = 0;
         return btn;
     }
 
@@ -260,16 +299,27 @@ public partial class MainForm : Form
         // Create tab header panel
         tab.TabPanel = new Panel
         {
-            Size = new Size(140, 24),
+            Size = new Size(130, 26),
             Margin = new Padding(0, 0, 2, 0),
             Cursor = Cursors.Hand
         };
+        tab.TabPanel.Paint += (s, e) => PaintTabPanel(e, tab);
+
+        // Colored circle indicator
+        var indicator = new Panel
+        {
+            Size = new Size(10, 10),
+            Location = new Point(10, 8),
+            BackColor = Color.FromArgb(255, 140, 50) // Orange indicator like reference
+        };
+        MakeCircular(indicator);
+        tab.TabPanel.Controls.Add(indicator);
 
         tab.TabLabel = new Label
         {
             Text = tab.Title,
-            Location = new Point(8, 4),
-            AutoSize = true,
+            Location = new Point(26, 5),
+            Size = new Size(75, 18),
             Font = new Font("Segoe UI", 9),
             Cursor = Cursors.Hand
         };
@@ -280,9 +330,9 @@ public partial class MainForm : Form
         {
             Text = "×",
             Size = new Size(20, 20),
-            Location = new Point(116, 2),
+            Location = new Point(106, 3),
             FlatStyle = FlatStyle.Flat,
-            Font = new Font("Segoe UI", 9),
+            Font = new Font("Segoe UI", 10),
             Cursor = Cursors.Hand
         };
         tab.CloseButton.FlatAppearance.BorderSize = 0;
@@ -308,6 +358,37 @@ public partial class MainForm : Form
         _tabs.Add(tab);
         RefreshTabBar();
         SelectTab(tab);
+    }
+
+    private void MakeCircular(Panel panel)
+    {
+        var path = new GraphicsPath();
+        path.AddEllipse(0, 0, panel.Width, panel.Height);
+        panel.Region = new Region(path);
+    }
+
+    private void PaintTabPanel(PaintEventArgs e, ScriptTab tab)
+    {
+        var g = e.Graphics;
+        g.SmoothingMode = SmoothingMode.AntiAlias;
+
+        var rect = new Rectangle(0, 0, tab.TabPanel.Width - 1, tab.TabPanel.Height - 1);
+        var bgColor = tab == _activeTab ? _currentPalette.TabActive : _currentPalette.TabInactive;
+
+        using var brush = new SolidBrush(bgColor);
+        using var path = CreateRoundedRectangle(rect, 6);
+        g.FillPath(brush, path);
+    }
+
+    private GraphicsPath CreateRoundedRectangle(Rectangle rect, int radius)
+    {
+        var path = new GraphicsPath();
+        path.AddArc(rect.X, rect.Y, radius * 2, radius * 2, 180, 90);
+        path.AddArc(rect.Right - radius * 2, rect.Y, radius * 2, radius * 2, 270, 90);
+        path.AddArc(rect.Right - radius * 2, rect.Bottom - radius * 2, radius * 2, radius * 2, 0, 90);
+        path.AddArc(rect.X, rect.Bottom - radius * 2, radius * 2, radius * 2, 90, 90);
+        path.CloseFigure();
+        return path;
     }
 
     private void SelectTab(ScriptTab tab)
@@ -364,22 +445,23 @@ public partial class MainForm : Form
     {
         _tabContainer.Controls.Clear();
 
-        int x = 5;
+        int x = 10;
         foreach (var tab in _tabs)
         {
             tab.TabLabel.Text = tab.DisplayTitle;
-            tab.TabPanel.Location = new Point(x, 4);
-            tab.TabPanel.BackColor = tab == _activeTab ? _currentPalette.TabActive : _currentPalette.TabInactive;
+            tab.TabPanel.Location = new Point(x, 5);
+            tab.TabPanel.BackColor = Color.Transparent;
             tab.TabLabel.ForeColor = _currentPalette.TextColor;
             tab.CloseButton.ForeColor = _currentPalette.TextSecondary;
-            tab.CloseButton.BackColor = tab.TabPanel.BackColor;
+            tab.CloseButton.BackColor = Color.Transparent;
+            tab.TabPanel.Invalidate();
             _tabContainer.Controls.Add(tab.TabPanel);
-            x += tab.TabPanel.Width + 2;
+            x += tab.TabPanel.Width + 4;
         }
 
-        _addTabBtn.Location = new Point(x, 4);
-        _addTabBtn.BackColor = _currentPalette.BackgroundMedium;
-        _addTabBtn.ForeColor = _currentPalette.TextColor;
+        _addTabBtn.Location = new Point(x + 5, 6);
+        _addTabBtn.BackColor = Color.Transparent;
+        _addTabBtn.ForeColor = _currentPalette.TextSecondary;
         _tabContainer.Controls.Add(_addTabBtn);
     }
 
@@ -401,49 +483,55 @@ public partial class MainForm : Form
     {
         _currentPalette = palette;
 
-        // Form
-        BackColor = _currentPalette.BackgroundDark;
+        // Form - use pure black for background
+        BackColor = Color.FromArgb(15, 15, 15);
 
         // Title bar
-        _titleBar.BackColor = _currentPalette.BackgroundDark;
-        _logoLabel.ForeColor = Color.FromArgb(0, 122, 204); // Keep logo blue always
+        _titleBar.BackColor = Color.FromArgb(15, 15, 15);
+        _logoPanel.Invalidate();
+
+        // Settings button
+        _settingsBtn.BackColor = Color.FromArgb(15, 15, 15);
+        _settingsBtn.ForeColor = _currentPalette.TextSecondary;
+        _settingsBtn.FlatAppearance.MouseOverBackColor = _currentPalette.ButtonHover;
 
         // Window controls
         foreach (Control ctrl in _windowControls.Controls)
         {
-            if (ctrl is Button btn)
+            if (ctrl is Button btn && ctrl != _settingsBtn)
             {
-                btn.BackColor = _currentPalette.BackgroundDark;
-                btn.ForeColor = _currentPalette.TextColor;
+                btn.BackColor = Color.FromArgb(15, 15, 15);
+                btn.ForeColor = _currentPalette.TextSecondary;
                 btn.FlatAppearance.MouseOverBackColor = _currentPalette.ButtonHover;
             }
         }
 
-        // Tab bar
-        _tabBar.BackColor = _currentPalette.BackgroundMedium;
-        _tabContainer.BackColor = _currentPalette.BackgroundMedium;
+        // Tab bar - slightly lighter
+        _tabBar.BackColor = Color.FromArgb(25, 25, 25);
+        _tabContainer.BackColor = Color.FromArgb(25, 25, 25);
 
-        // Editor
-        _editorContainer.BackColor = _currentPalette.BackgroundLight;
-        _lineNumberPanel.BackColor = _currentPalette.BackgroundMedium;
-        _lineNumbers.BackColor = _currentPalette.BackgroundMedium;
-        _lineNumbers.ForeColor = _currentPalette.TextSecondary;
+        // Editor - darker
+        _editorContainer.BackColor = Color.FromArgb(20, 20, 20);
+        _lineNumberPanel.BackColor = Color.FromArgb(20, 20, 20);
+        _lineNumbers.BackColor = Color.FromArgb(20, 20, 20);
+        _lineNumbers.ForeColor = Color.FromArgb(100, 100, 100); // Dimmer line numbers
 
         foreach (var tab in _tabs)
         {
-            tab.Editor.BackColor = _currentPalette.BackgroundLight;
+            tab.Editor.BackColor = Color.FromArgb(20, 20, 20);
             tab.Editor.ForeColor = _currentPalette.TextColor;
         }
 
-        // Toolbar
-        _toolbar.BackColor = _currentPalette.BackgroundDark;
+        // Toolbar - same as form background
+        _toolbar.BackColor = Color.FromArgb(25, 25, 25);
+        _toolbarInner.BackColor = Color.FromArgb(25, 25, 25);
+
         ApplyToolbarButtonStyle(_executeBtn);
         ApplyToolbarButtonStyle(_clearBtn);
         ApplyToolbarButtonStyle(_openBtn);
         ApplyToolbarButtonStyle(_saveBtn);
         ApplyToolbarButtonStyle(_attachBtn);
         ApplyToolbarButtonStyle(_killBtn);
-        ApplyToolbarButtonStyle(_paletteBtn);
 
         // Refresh tabs and syntax highlighting
         RefreshTabBar();
@@ -453,14 +541,28 @@ public partial class MainForm : Form
             _highlighter?.UpdatePalette(palette);
             _highlighter?.HighlightAll();
         }
+
+        Invalidate();
     }
 
     private void ApplyToolbarButtonStyle(Button btn)
     {
-        btn.BackColor = _currentPalette.ButtonBackground;
+        btn.BackColor = Color.FromArgb(45, 45, 45);
         btn.ForeColor = _currentPalette.TextColor;
-        btn.FlatAppearance.BorderColor = _currentPalette.BorderColor;
-        btn.FlatAppearance.MouseOverBackColor = _currentPalette.ButtonHover;
+        btn.FlatAppearance.BorderColor = Color.FromArgb(45, 45, 45);
+        btn.FlatAppearance.MouseOverBackColor = Color.FromArgb(65, 65, 65);
+        btn.FlatAppearance.MouseDownBackColor = Color.FromArgb(75, 75, 75);
+
+        // Round the buttons
+        var path = new GraphicsPath();
+        var rect = new Rectangle(0, 0, btn.Width, btn.Height);
+        int radius = 8;
+        path.AddArc(rect.X, rect.Y, radius * 2, radius * 2, 180, 90);
+        path.AddArc(rect.Right - radius * 2, rect.Y, radius * 2, radius * 2, 270, 90);
+        path.AddArc(rect.Right - radius * 2, rect.Bottom - radius * 2, radius * 2, radius * 2, 0, 90);
+        path.AddArc(rect.X, rect.Bottom - radius * 2, radius * 2, radius * 2, 90, 90);
+        path.CloseFigure();
+        btn.Region = new Region(path);
     }
 
     #region Title Bar Dragging
@@ -520,7 +622,6 @@ public partial class MainForm : Form
         // Sync line numbers scroll with editor
         int firstVisibleChar = _activeTab.Editor.GetCharIndexFromPosition(new Point(0, 0));
         int firstVisibleLine = _activeTab.Editor.GetLineFromCharIndex(firstVisibleChar);
-        int lineHeight = _activeTab.Editor.Font.Height;
 
         _lineNumbers.SelectionStart = 0;
         _lineNumbers.ScrollToCaret();
@@ -702,9 +803,9 @@ public partial class MainForm : Form
             "Kill", MessageBoxButtons.OK, MessageBoxIcon.Information);
     }
 
-    private void PaletteBtn_Click(object? sender, EventArgs e)
+    private void SettingsBtn_Click(object? sender, EventArgs e)
     {
-        _paletteMenu.Show(_paletteBtn, new Point(0, -_paletteMenu.Height));
+        _settingsMenu.Show(_settingsBtn, new Point(0, _settingsBtn.Height));
     }
 
     #endregion
@@ -713,14 +814,15 @@ public partial class MainForm : Form
     {
         base.OnPaint(e);
 
-        // Draw border
-        using var pen = new Pen(_currentPalette.BorderColor, 1);
+        // Draw subtle border
+        using var pen = new Pen(Color.FromArgb(40, 40, 40), 1);
         e.Graphics.DrawRectangle(pen, 0, 0, Width - 1, Height - 1);
     }
 
     protected override void OnResize(EventArgs e)
     {
         base.OnResize(e);
+        CenterToolbar();
         Invalidate();
     }
 }
